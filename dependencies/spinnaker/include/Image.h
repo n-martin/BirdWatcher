@@ -457,7 +457,7 @@ namespace Spinnaker
          * @param pFilename Filename to save image with.
          * @param format File format to save in.
          */
-        void Save(const char* pFilename, ImageFileFormat format = FROM_FILE_EXT);
+        void Save(const char* pFilename, ImageFileFormat format = FROM_FILE_EXT) const;
 
         /**
          * Saves the image to the specified file name with the options specified.
@@ -465,7 +465,7 @@ namespace Spinnaker
          * @param pFilename Filename to save image with.
          * @param pOption Options to use while saving image.
          */
-        void Save(const char* pFilename, PNGOption& pOption);
+        void Save(const char* pFilename, PNGOption& pOption) const;
 
         /**
          * Saves the image to the specified file name with the options specified.
@@ -473,7 +473,7 @@ namespace Spinnaker
          * @param pFilename Filename to save image with.
          * @param pOption Options to use while saving image.
          */
-        void Save(const char* pFilename, PPMOption& pOption);
+        void Save(const char* pFilename, PPMOption& pOption) const;
 
         /**
          * Saves the image to the specified file name with the options specified.
@@ -481,7 +481,7 @@ namespace Spinnaker
          * @param pFilename Filename to save image with.
          * @param pOption Options to use while saving image.
          */
-        void Save(const char* pFilename, PGMOption& pOption);
+        void Save(const char* pFilename, PGMOption& pOption) const;
 
         /**
          * Saves the image to the specified file name with the options specified.
@@ -489,7 +489,7 @@ namespace Spinnaker
          * @param pFilename Filename to save image with.
          * @param pOption Options to use while saving image.
          */
-        void Save(const char* pFilename, TIFFOption& pOption);
+        void Save(const char* pFilename, TIFFOption& pOption) const;
 
         /**
          * Saves the image to the specified file name with the options specified.
@@ -497,7 +497,7 @@ namespace Spinnaker
          * @param pFilename Filename to save image with.
          * @param pOption Options to use while saving image.
          */
-        void Save(const char* pFilename, JPEGOption& pOption);
+        void Save(const char* pFilename, JPEGOption& pOption) const;
 
         /**
          * Saves the image to the specified file name with the options specified.
@@ -505,7 +505,7 @@ namespace Spinnaker
          * @param pFilename Filename to save image with.
          * @param pOption Options to use while saving image.
          */
-        void Save(const char* pFilename, JPG2Option& pOption);
+        void Save(const char* pFilename, JPG2Option& pOption) const;
 
         /**
          * Saves the image to the specified file name with the options specified.
@@ -513,7 +513,7 @@ namespace Spinnaker
          * @param pFilename Filename to save image with.
          * @param pOption Options to use while saving image.
          */
-        void Save(const char* pFilename, BMPOption& pOption);
+        void Save(const char* pFilename, BMPOption& pOption) const;
 
         /**
          * Returns a pointer to a chunk data interface.  No ownership is transfered,

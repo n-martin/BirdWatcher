@@ -92,8 +92,16 @@ namespace Spinnaker
          */
         void Clear();
 
+        /**
+         * Appends a copy of the interfact list.
+         *
+         * @param list Another InterfaceList object, whose elements are added to this list.
+         */
+        void Append(const InterfaceList* list);
+
       protected:
         friend class SystemImpl;
+        friend class ProducerImpl;
     };
 
     /*@}*/

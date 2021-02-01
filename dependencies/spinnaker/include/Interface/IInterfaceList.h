@@ -22,6 +22,8 @@
 
 namespace Spinnaker
 {
+    class InterfaceList;
+
     /**
      * @defgroup SpinnakerClasses Spinnaker Classes
      */
@@ -46,8 +48,10 @@ namespace Spinnaker
         virtual unsigned int GetSize() const = 0;
         virtual InterfacePtr GetByIndex(unsigned int index) const = 0;
         virtual void Clear() = 0;
+        virtual void Append(const InterfaceList* list) = 0;
 
       protected:
+        friend class InterfaceListImpl;
         struct InterfaceListData; // Forward declaration
         InterfaceListData* m_pInterfaceListData;
 

@@ -26,6 +26,7 @@ namespace Spinnaker
     class Port;
     class TransportLayerStream;
     class ImagePtr;
+    class IGenTLDevice;
     class IGenTLStream;
 
     class IDataStream
@@ -33,6 +34,8 @@ namespace Spinnaker
 
       public:
         virtual ~IDataStream(){};
+
+        virtual void ResetStreamHandle(std::shared_ptr<Spinnaker::IGenTLDevice> pDevice) = 0;
         virtual StreamTypeEnum GetStreamType() const = 0;
 
         virtual void AnnounceImage(size_t size) = 0;

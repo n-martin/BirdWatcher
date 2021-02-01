@@ -23,15 +23,15 @@
 namespace Spinnaker
 {
     // Forward declaration of implementation class
-    class SystemImpl;
+    class ProducerImpl;
     class SystemPtr;
     class LoggingEventHandler;
 
     // Define macros for getting Spinnaker library version
 #define FLIR_SPINNAKER_VERSION_MAJOR 2
-#define FLIR_SPINNAKER_VERSION_MINOR 2
+#define FLIR_SPINNAKER_VERSION_MINOR 3
 #define FLIR_SPINNAKER_VERSION_TYPE  0
-#define FLIR_SPINNAKER_VERSION_BUILD 48
+#define FLIR_SPINNAKER_VERSION_BUILD 77
 
     /**
      * @defgroup SpinnakerClasses Spinnaker Classes
@@ -95,6 +95,14 @@ namespace Spinnaker
         virtual InterfaceList GetInterfaces(bool updateInterface = true);
 
         /**
+         * Updates the list of interfaces on the system. If desired, local copies
+         * of InterfaceList should be updated by calling GetInterfaces.
+         *
+         * @see GetInterfaces()
+         */
+        virtual void UpdateInterfaceList();
+
+        /**
          * Returns a list of cameras that are available on the system.  This call
          * returns both GigE Vision and Usb3 Vision cameras from all interfaces.
          * The camera list object will reference count the cameras it returns.  It
@@ -133,15 +141,9 @@ namespace Spinnaker
         virtual bool UpdateCameras(bool updateInterfaces = true);
 
         /**
-         * Updates the list of interfaces on the system. If desired, local copies
-         * of InterfaceList should be updated by calling GetInterfaces.
-         *
-         * @see GetInterfaces()
-         */
-        virtual void UpdateInterfaceList();
-
-        /**
          * Registers an event handler for the system
+         *
+         * @see SystemEventHandler
          *
          * @param evtHandlerToRegister The event handler to register for the system
          *
@@ -151,6 +153,8 @@ namespace Spinnaker
         /**
          * Unregisters an event handler for the system
          *
+         * @see SystemEventHandler
+         *
          * @param evtHandlerToUnregister The event handler to unregister from the system
          *
          */
@@ -158,9 +162,11 @@ namespace Spinnaker
 
         /**
          * Registers event handlers for all available interfaces that are found on the system
-         * If new interfaces are detected by the system after RegisterInterfaceEventHandler() is called, those interfaces will
-         * be automatically registered with this event.
-         * Note that only GEV interface arrivals and removals are currently handled.
+         * If new interfaces are detected by the system after RegisterInterfaceEventHandler() is called, those
+         * interfaces will be automatically registered with this event. Note that only GEV interface arrivals and
+         * removals are currently handled.
+         *
+         * @see InterfaceEventHandler
          *
          * @param evtHandlerToRegister The event handler to register for the available interfaces
          * @param updateInterface Determines whether or not UpdateInterfaceList() is called before registering event for
@@ -170,6 +176,8 @@ namespace Spinnaker
 
         /**
          * Unregisters event handlers for all available interfaces that are found on the system
+         *
+         * @see InterfaceEventHandler
          *
          * @param evtHandlerToUnregister The event handler to unregister from the available interfaces
          */

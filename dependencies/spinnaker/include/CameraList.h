@@ -96,13 +96,13 @@ namespace Spinnaker
         CameraPtr GetBySerial(std::string serialNumber) const;
 
         /**
-        * Returns a pointer to a camera object with the specified device identifier. This
-        * function will return a NULL CameraPtr if no matching device identifier is found.
-        *
-        * @param deviceID The unique device identifier of the camera object to retrieve
-        *
-        * @return A pointer to a camera object.
-        */
+         * Returns a pointer to a camera object with the specified device identifier. This
+         * function will return a NULL CameraPtr if no matching device identifier is found.
+         *
+         * @param deviceID The unique device identifier of the camera object to retrieve
+         *
+         * @return A pointer to a camera object.
+         */
         CameraPtr GetByDeviceID(std::string deviceID) const;
 
         /**
@@ -136,20 +136,20 @@ namespace Spinnaker
         void RemoveBySerial(std::string serialNumber);
 
         /**
-        * Removes a camera using its unique device identifier and destroys its corresponding reference counted
-        * object. This function will throw a Spinnaker exception with SPINNAKER_ERR_NOT_AVAILABLE
-        * error if no matching device identifier is found.
-        *
-        * @param deviceID The unique device identifier of the camera object to retrieve
-        */
+         * Removes a camera using its unique device identifier and destroys its corresponding reference counted
+         * object. This function will throw a Spinnaker exception with SPINNAKER_ERR_NOT_AVAILABLE
+         * error if no matching device identifier is found.
+         *
+         * @param deviceID The unique device identifier of the camera object to retrieve
+         */
         void RemoveByDeviceID(std::string deviceID);
 
         /**
-         * Appends a camera list to the current list.
+         * Appends a copy of the camera list.
          *
-         * @param otherList The other list to append to this list
+         * @param list Another CameraList object, whose elements are added to this list.
          */
-        void Append(CameraList& otherList);
+        void Append(const CameraList& list);
     };
 
     /*@}*/

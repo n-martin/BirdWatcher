@@ -87,7 +87,7 @@ namespace Spinnaker
 		GenApi::IInteger &StreamBufferCountMax;
 
 		/**
-		 * Description: Controls access to setting the number of buffers used for the stream. Locked to Manual mode on 32-bit Windows due to memory constraints.
+		 * Description: Controls access to setting the number of buffers used for the stream.
 		 * Visibility: Expert
 		 */
 		GenApi::IEnumerationT<StreamBufferCountModeEnum> &StreamBufferCountMode;
@@ -189,7 +189,7 @@ namespace Spinnaker
 		GenApi::IInteger &GevTotalPacketCount;
 
 		/**
-		 * Description: Displays number of packets missed on this stream.
+		 * Description: Displays number of packets missed on this stream. Successful resent packets are not counted as a missed packet.
 		 * Visibility: Expert
 		 */
 		GenApi::IInteger &GevFailedPacketCount;
@@ -201,7 +201,7 @@ namespace Spinnaker
 		GenApi::IInteger &GevResendPacketCount;
 
 		/**
-		 * Description: Displays number of incomplete images with missing leader/trailer information.
+		 * Description: Displays number of images with missing packet.
 		 * Visibility: Expert
 		 */
 		GenApi::IInteger &StreamFailedBufferCount;

@@ -56,7 +56,7 @@ namespace Spinnaker
         virtual void RemoveBySerial(std::string serialNumber) = 0;
         virtual void RemoveByIndex(unsigned int index) = 0;
         virtual void RemoveByDeviceID(std::string deviceID) = 0;
-        virtual void Append(CameraList& otherList) = 0;
+        virtual void Append(const CameraList& list) = 0;
 
       protected:
         friend class InterfaceImpl;

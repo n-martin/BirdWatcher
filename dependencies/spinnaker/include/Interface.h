@@ -92,10 +92,12 @@ namespace Spinnaker
 
         /**
          * Registers an event handler for the interface
-         * Event handlers are automatically cleaned up when an interface is removed, and must be 
-         * registered to interfaces as they arrive. Note that GEV interfaces experience 
+         * Event handlers are automatically cleaned up when an interface is removed, and must be
+         * registered to interfaces as they arrive. Note that GEV interfaces experience
          * arrival/removal events when the IP information changes, similar to GEV cameras.
          * Please refer to the EnumerationEvents example for recommended use.
+         *
+         * @see InterfaceEventHandler
          *
          * @param evtHandlerToRegister The event handler to register for the interface
          *
@@ -104,6 +106,8 @@ namespace Spinnaker
 
         /**
          * Unregisters an event handler for the interface
+         *
+         * @see InterfaceEventHandler
          *
          * @param evtHandlerToUnregister The event handler to unregister from the interface
          *

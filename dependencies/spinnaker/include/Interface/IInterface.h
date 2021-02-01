@@ -68,7 +68,7 @@ namespace Spinnaker
 
       protected:
         friend class InterfaceInternal;
-        friend class SystemImpl;
+        friend class ProducerImpl;
         struct InterfaceData; // Forward declaration
         InterfaceData* m_pInterfaceData;
 
