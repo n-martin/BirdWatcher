@@ -309,7 +309,14 @@ int PrintDeviceInfo(INodeMap& nodeMap)
                 CNodePtr pfeatureNode = *it;
                 cout << pfeatureNode->GetName() << " : ";
                 CValuePtr pValue = (CValuePtr)pfeatureNode;
-                cout << (IsReadable(pValue) ? pValue->ToString() : "Node not readable");
+                if (IsReadable(pValue))
+                {
+                    cout << pValue->ToString();
+                }
+                else
+                {
+                    cout << "Node not readable";
+                }
                 cout << endl;
             }
         }
