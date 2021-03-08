@@ -6,8 +6,15 @@
 trigger:
 - master
 
+strategy:
+  matrix:
+    mac:
+      imageName: 'macOS-10.15'
+    windows:
+      imageName: 'windows-2019'
+
 pool:
-  vmImage: 'macOS-latest'
+  vmImage: $(imageName)
 
 steps:
 - task: CMake@1
