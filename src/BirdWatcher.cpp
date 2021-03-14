@@ -18,6 +18,9 @@ using namespace Spinnaker::GenApi;
 using namespace Spinnaker::GenICam;
 using namespace std;
 
+const char* arrayLabelClassification[] = {"no bird", "bird"};
+const std::vector<std::string> labelClassification(arrayLabelClassification, end(arrayLabelClassification));
+
 std::string GetDateTime(){
     std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
@@ -26,257 +29,365 @@ std::string GetDateTime(){
     return s;
 }
 
-// This function configures the camera to use a trigger. First, trigger mode is
-// set to off in order to select the trigger source. Once the trigger source
-// has been selected, trigger mode is then enabled, which has the camera
-// capture only a single image upon the execution of the trigger.
+// This function enables or disables the given chunk data type based on
+// the specified entry name.
+int SetChunkEnable(INodeMap& nodeMap, const gcstring& entryName, const bool enable)
+{
+    int result = 0;
+    CEnumerationPtr ptrChunkSelector = nodeMap.GetNode("ChunkSelector");
+
+    const CEnumEntryPtr ptrEntry = ptrChunkSelector->GetEntryByName(entryName);
+    if (!IsReadable(ptrEntry))
+    {
+        return -1;
+    }
+
+    ptrChunkSelector->SetIntValue(ptrEntry->GetValue());
+
+    // Enable the boolean, thus enabling the corresponding chunk data
+    cout << entryName << " ";
+    CBooleanPtr ptrChunkEnable = nodeMap.GetNode("ChunkEnable");
+    if (!IsAvailable(ptrChunkEnable))
+    {
+        cout << "not available" << endl;
+        return -1;
+    }
+    if (enable)
+    {
+        if (ptrChunkEnable->GetValue())
+        {
+            cout << "enabled" << endl;
+        }
+        else if (IsWritable(ptrChunkEnable))
+        {
+            ptrChunkEnable->SetValue(true);
+            cout << "enabled" << endl;
+        }
+        else
+        {
+            cout << "not writable" << endl;
+            result = -1;
+        }
+    }
+    else
+    {
+        if (!ptrChunkEnable->GetValue())
+        {
+            cout << "disabled" << endl;
+        }
+        else if (IsWritable(ptrChunkEnable))
+        {
+            ptrChunkEnable->SetValue(false);
+            cout << "disabled" << endl;
+        }
+        else
+        {
+            cout << "not writable" << endl;
+            result = -1;
+        }
+    }
+
+    return result;
+}
+
+// This function enables/disables inference on the camera and configures the inference network type
+int ConfigureInference(INodeMap& nodeMap, bool isEnabled)
+{
+    int result = 0;
+
+    if (isEnabled)
+    {
+        cout << endl << endl << "*** CONFIGURING INFERENCE (CLASSIFICATION) ***" << endl << endl;
+    }
+    else
+    {
+        cout << endl << endl << "*** DISABLING INFERENCE ***" << endl << endl;
+    }
+
+    try
+    {
+        if (isEnabled)
+        {
+            // Set Network Type to Classification
+            CEnumerationPtr ptrInferenceNetworkTypeSelector = nodeMap.GetNode("InferenceNetworkTypeSelector");
+            if (!IsWritable(ptrInferenceNetworkTypeSelector))
+            {
+                cout << "Unable to query InferenceNetworkTypeSelector. Aborting..." << endl;
+                return -1;
+            }
+
+            // Retrieve entry node from enumeration node
+            CEnumEntryPtr ptrInferenceNetworkType = ptrInferenceNetworkTypeSelector->GetEntryByName("Classification");
+            if (!IsReadable(ptrInferenceNetworkType))
+            {
+                cout << "Unable to set inference network type to Classification (entry retrieval). Aborting..." << endl << endl;
+                return -1;
+            }
+
+            ptrInferenceNetworkTypeSelector->SetIntValue(
+                static_cast<int64_t>(ptrInferenceNetworkType->GetNumericValue()));
+
+            cout << "Inference network type set to Classification..." << endl;
+        }
+
+        // Enable/Disable inference
+        cout << (isEnabled ? "Enabling" : "Disabling") << " inference..." << endl;
+        CBooleanPtr ptrInferenceEnable = nodeMap.GetNode("InferenceEnable");
+        if (!IsWritable(ptrInferenceEnable))
+        {
+            cout << "Unable to enable inference. Aborting..." << endl;
+            return -1;
+        }
+
+        ptrInferenceEnable->SetValue(isEnabled);
+        cout << "Inference " << (isEnabled ? "enabled..." : "disabled...") << endl;
+    }
+    catch (Spinnaker::Exception& e)
+    {
+        cout << "Unexpected exception : " << e.what() << endl;
+        result = -1;
+    }
+
+    return result;
+}
+
+// This function configures camera to run in "inference sync" trigger mode.
 int ConfigureTrigger(INodeMap& nodeMap)
 {
+    cout << endl << endl << "*** CONFIGURING TRIGGER ***" << endl << endl;
     int result = 0;
-
-    cout << "Configuring trigger..." << endl;
-
-    cout << "Note that if the application / user software triggers faster than frame time, the trigger may be dropped/skipped by the camera." << endl << "If several frames are needed per trigger, a more reliable alternative for such case, is to use the multi-frame mode." << endl << endl;
 
     try
     {
-        //
-        // Ensure trigger mode off
-        //
-        // *** NOTES ***
-        // The trigger must be disabled in order to configure whether the source
-        // is software or hardware.
-        //
-        CEnumerationPtr ptrTriggerMode = nodeMap.GetNode("TriggerMode");
-        if (!IsAvailable(ptrTriggerMode) || !IsReadable(ptrTriggerMode))
-        {
-            cout << "Unable to disable trigger mode (node retrieval). Aborting..." << endl;
-            return -1;
-        }
-
-        CEnumEntryPtr ptrTriggerModeOff = ptrTriggerMode->GetEntryByName("Off");
-        if (!IsAvailable(ptrTriggerModeOff) || !IsReadable(ptrTriggerModeOff))
-        {
-            cout << "Unable to disable trigger mode (enum entry retrieval). Aborting..." << endl;
-            return -1;
-        }
-
-        ptrTriggerMode->SetIntValue(ptrTriggerModeOff->GetValue());
-
-        cout << "Trigger mode disabled..." << endl;
-
-        //
-        // Set TriggerSelector to FrameStart
-        //
-        // *** NOTES ***
-        // For this example, the trigger selector should be set to frame start.
-        // This is the default for most cameras.
-        //
+        // Configure TriggerSelector
         CEnumerationPtr ptrTriggerSelector = nodeMap.GetNode("TriggerSelector");
-        if (!IsAvailable(ptrTriggerSelector) || !IsWritable(ptrTriggerSelector))
+        if (!IsWritable(ptrTriggerSelector))
         {
-            cout << "Unable to set trigger selector (node retrieval). Aborting..." << endl;
+            cout << "Unable to configure TriggerSelector. Aborting..." << endl;
             return -1;
         }
 
-        CEnumEntryPtr ptrTriggerSelectorFrameStart = ptrTriggerSelector->GetEntryByName("FrameStart");
-        if (!IsAvailable(ptrTriggerSelectorFrameStart) || !IsReadable(ptrTriggerSelectorFrameStart))
+        CEnumEntryPtr ptrFrameStart = ptrTriggerSelector->GetEntryByName("FrameStart");
+        if (!IsReadable(ptrFrameStart))
         {
-            cout << "Unable to set trigger selector (enum entry retrieval). Aborting..." << endl;
+            cout << "Unable to query TriggerSelector FrameStart. Aborting..." << endl;
             return -1;
         }
 
-        ptrTriggerSelector->SetIntValue(ptrTriggerSelectorFrameStart->GetValue());
+        cout << "Configure TriggerSelector to " << ptrFrameStart->GetSymbolic() << endl;
+        ptrTriggerSelector->SetIntValue(static_cast<int64_t>(ptrFrameStart->GetNumericValue()));
 
-        cout << "Trigger selector set to frame start..." << endl;
-
-        //
-        // Select trigger source
-        //
-        // *** NOTES ***
-        // The trigger source must be set to hardware or software while trigger
-        // mode is off.
-        //
+        // Configure TriggerSource
         CEnumerationPtr ptrTriggerSource = nodeMap.GetNode("TriggerSource");
-        if (!IsAvailable(ptrTriggerSource) || !IsWritable(ptrTriggerSource))
+        if (!IsWritable(ptrTriggerSource))
         {
-            cout << "Unable to set trigger mode (node retrieval). Aborting..." << endl;
+            cout << "Unable to configure TriggerSource. Aborting..." << endl;
             return -1;
         }
 
-        // Set trigger mode to software
-        CEnumEntryPtr ptrTriggerSourceSoftware = ptrTriggerSource->GetEntryByName("Software");
-        if (!IsAvailable(ptrTriggerSourceSoftware) || !IsReadable(ptrTriggerSourceSoftware))
+        CEnumEntryPtr ptrInferenceReady = ptrTriggerSource->GetEntryByName("InferenceReady");
+        if (!IsReadable(ptrInferenceReady))
         {
-            cout << "Unable to set trigger mode (enum entry retrieval). Aborting..." << endl;
+            cout << "Unable to query TriggerSource InferenceReady. Aborting..." << endl;
             return -1;
         }
 
-        ptrTriggerSource->SetIntValue(ptrTriggerSourceSoftware->GetValue());
+        cout << "Configure TriggerSource to " << ptrInferenceReady->GetSymbolic() << endl;
+        ptrTriggerSource->SetIntValue(static_cast<int64_t>(ptrInferenceReady->GetNumericValue()));
 
-        cout << "Trigger source set to software..." << endl;
-
-        //
-        // Turn trigger mode on
-        //
-        // *** LATER ***
-        // Once the appropriate trigger source has been set, turn trigger mode
-        // on in order to retrieve images using the trigger.
-        //
-
-        CEnumEntryPtr ptrTriggerModeOn = ptrTriggerMode->GetEntryByName("On");
-        if (!IsAvailable(ptrTriggerModeOn) || !IsReadable(ptrTriggerModeOn))
-        {
-            cout << "Unable to enable trigger mode (enum entry retrieval). Aborting..." << endl;
-            return -1;
-        }
-
-        ptrTriggerMode->SetIntValue(ptrTriggerModeOn->GetValue());
-
-        // NOTE: Blackfly and Flea3 GEV cameras need 1 second delay after trigger mode is turned on
-
-        cout << "Trigger mode turned back on..." << endl << endl;
-    }
-    catch (Spinnaker::Exception& e)
-    {
-        cout << "Error: " << e.what() << endl;
-        result = -1;
-    }
-
-    return result;
-}
-
-int ConfigureCamera(INodeMap& nodeMap)
-{
-    cout << endl << endl << "*** CONFIGURING CAMERA ***" << endl << endl;
-    // Configure trigger
-    int err = ConfigureTrigger(nodeMap);
-    if (err < 0)
-    {
-        return err;
-    }
-
-    // try
-    // {
-    //     cout << "Loading user set 0..." << endl;
-
-    //     // Set acquisition mode to continuous
-    //     CEnumerationPtr ptrUserSetSelector = nodeMap.GetNode("UserSetSelector");
-    //     if (!IsAvailable(ptrUserSetSelector) || !IsWritable(ptrUserSetSelector))
-    //     {
-    //         cout << "Unable to load user set 0 (node retrieval). Aborting..." << endl << endl;
-    //         return -1;
-    //     }
-
-    //     CEnumEntryPtr ptrUserSetSelectorZero = ptrUserSetSelector->GetEntryByName("UserSet0");
-    //     if (!IsAvailable(ptrUserSetSelectorZero) || !IsReadable(ptrUserSetSelectorZero))
-    //     {
-    //         cout << "Unable to load user set 0 (entry 'UserSet0' retrieval). Aborting..." << endl << endl;
-    //         return -1;
-    //     }
-
-    //     int64_t acquisitionModeContinuous = ptrUserSetSelectorZero->GetValue();
-
-    //     ptrUserSetSelector->SetIntValue(acquisitionModeContinuous);
-
-    //     cout << "User set selector set to UserSet0" << endl;
-
-    //     // Execute software trigger
-    //     CCommandPtr ptrSoftwareUserSetLoadCommand = nodeMap.GetNode("UserSetLoad");
-    //     if (!IsAvailable(ptrSoftwareUserSetLoadCommand) || !IsReadable(ptrSoftwareUserSetLoadCommand))
-    //     {
-    //         cout << "Unable to execute user set load. Aborting..." << endl;
-    //         return -1;
-    //     }
-
-    //     ptrSoftwareUserSetLoadCommand->Execute();
-    //     cout << "Default user set loaded!" << endl;
-    // }
-    // catch (Spinnaker::Exception& e)
-    // {
-    //     cout << "Error: " << e.what() << endl;
-    //     err = -1;
-    // }
-    
-    return err;
-}
-
-// This function retrieves a single image using the trigger. In this example,
-// only a single image is captured and made available for acquisition - as such,
-// attempting to acquire two images for a single trigger execution would cause
-// the example to hang. This is different from other examples, whereby a
-// constant stream of images are being captured and made available for image
-// acquisition.
-int GrabNextImageByTrigger(INodeMap& nodeMap, CameraPtr pCam)
-{
-    int result = 0;
-
-    try
-    {
-        //
-        // Use trigger to capture image
-        //
-        // *** NOTES ***
-        // The software trigger only feigns being executed by the Enter key;
-        // what might not be immediately apparent is that there is not a
-        // continuous stream of images being captured; in other examples that
-        // acquire images, the camera captures a continuous stream of images.
-        // When an image is retrieved, it is plucked from the stream.
-        //
-
-        // Execute software trigger
-        CCommandPtr ptrSoftwareTriggerCommand = nodeMap.GetNode("TriggerSoftware");
-        if (!IsAvailable(ptrSoftwareTriggerCommand) || !IsWritable(ptrSoftwareTriggerCommand))
-        {
-            cout << "Unable to execute trigger. Aborting..." << endl;
-            return -1;
-        }
-
-        ptrSoftwareTriggerCommand->Execute();
-
-        // NOTE: Blackfly and Flea3 GEV cameras need 2 second delay after software trigger
-    }
-    catch (Spinnaker::Exception& e)
-    {
-        cout << "Error: " << e.what() << endl;
-        result = -1;
-    }
-
-    return result;
-}
-
-// This function returns the camera to a normal state by turning off trigger
-// mode.
-int ResetTrigger(INodeMap& nodeMap)
-{
-    int result = 0;
-
-    try
-    {
-        //
-        // Turn trigger mode back off
-        //
-        // *** NOTES ***
-        // Once all images have been captured, turn trigger mode back off to
-        // restore the camera to a clean state.
-        //
+        // Configure TriggerMode
         CEnumerationPtr ptrTriggerMode = nodeMap.GetNode("TriggerMode");
-        if (!IsAvailable(ptrTriggerMode) || !IsReadable(ptrTriggerMode))
+        if (!IsWritable(ptrTriggerMode))
         {
-            cout << "Unable to disable trigger mode (node retrieval). Non-fatal error..." << endl;
+            cout << "Unable to configure TriggerMode. Aborting..." << endl;
             return -1;
         }
 
-        CEnumEntryPtr ptrTriggerModeOff = ptrTriggerMode->GetEntryByName("Off");
-        if (!IsAvailable(ptrTriggerModeOff) || !IsReadable(ptrTriggerModeOff))
+        CEnumEntryPtr ptrTriggerOn = ptrTriggerMode->GetEntryByName("On");
+        if (!IsReadable(ptrTriggerOn))
         {
-            cout << "Unable to disable trigger mode (enum entry retrieval). Non-fatal error..." << endl;
+            cout << "Unable to query TriggerMode On. Aborting..." << endl;
             return -1;
         }
 
-        ptrTriggerMode->SetIntValue(ptrTriggerModeOff->GetValue());
+        cout << "Configure TriggerMode to " << ptrTriggerOn->GetSymbolic() << endl;
+        ptrTriggerMode->SetIntValue(static_cast<int64_t>(ptrTriggerOn->GetNumericValue()));
+    }
+    catch (Spinnaker::Exception& e)
+    {
+        cout << "Unexpected exception : " << e.what();
+        result = -1;
+    }
 
-        cout << "Trigger mode disabled..." << endl << endl;
+    return result;
+}
+
+// This function disables trigger mode on the camera.
+int DisableTrigger(INodeMap& nodeMap)
+{
+    cout << endl << endl << "*** DISABLING TRIGGER ***" << endl << endl;
+    int result = 0;
+    try
+    {
+        // Configure TriggerMode
+        CEnumerationPtr ptrTriggerMode = nodeMap.GetNode("TriggerMode");
+        if (!IsWritable(ptrTriggerMode))
+        {
+            cout << "Unable to configure TriggerMode. Aborting..." << endl;
+            return -1;
+        }
+
+        CEnumEntryPtr ptrTriggerOff = ptrTriggerMode->GetEntryByName("Off");
+        if (!IsReadable(ptrTriggerOff))
+        {
+            cout << "Unable to query TriggerMode Off. Aborting..." << endl;
+            return -1;
+        }
+
+        cout << "Configure TriggerMode to " << ptrTriggerOff->GetSymbolic() << endl;
+        ptrTriggerMode->SetIntValue(static_cast<int64_t>(ptrTriggerOff->GetNumericValue()));
+    }
+    catch (Spinnaker::Exception& e)
+    {
+        cout << "Unexpected exception : " << e.what();
+        result = -1;
+    }
+
+    return result;
+}
+
+// This function configures the camera to add inference chunk data to each image.
+// When chunk data is turned on, the data is made available in both the nodemap
+// and each image.
+int ConfigureChunkData(INodeMap& nodeMap)
+{
+    int result = 0;
+
+    cout << endl << endl << "*** CONFIGURING CHUNK DATA ***" << endl << endl;
+
+    try
+    {
+        //
+        // Activate chunk mode
+        //
+        // *** NOTES ***
+        // Once enabled, chunk data will be available at the end of the payload
+        // of every image captured until it is disabled. Chunk data can also be
+        // retrieved from the nodemap.
+        //
+        CBooleanPtr ptrChunkModeActive = nodeMap.GetNode("ChunkModeActive");
+        if (!IsWritable(ptrChunkModeActive))
+        {
+            cout << "Unable to activate chunk mode. Aborting..." << endl;
+            return -1;
+        }
+        ptrChunkModeActive->SetValue(true);
+        cout << "Chunk mode activated..." << endl;
+
+        // Enable inference related chunks in chunk data
+
+        // Retrieve the chunk data selector node
+        const CEnumerationPtr ptrChunkSelector = nodeMap.GetNode("ChunkSelector");
+        if (!IsReadable(ptrChunkSelector))
+        {
+            cout << "Unable to retrieve chunk selector (enum retrieval). Aborting..." << endl;
+            return -1;
+        }
+
+        // Enable chunk data inference Frame Id
+        result = SetChunkEnable(nodeMap, "InferenceFrameId", true);
+        if (result == -1)
+        {
+            cout << "Unable to enable Inference Frame Id chunk data. Aborting..." << endl;
+            return result;
+        }
+
+        // Classification network type
+        // Enable chunk data inference result
+        result = SetChunkEnable(nodeMap, "InferenceResult", true);
+        if (result == -1)
+        {
+            cout << "Unable to enable Inference Result chunk data. Aborting..." << endl;
+            return result;
+        }
+
+        // Enable chunk data inference confidence
+        result = SetChunkEnable(nodeMap, "InferenceConfidence", true);
+        if (result == -1)
+        {
+            cout << "Unable to enable Inference Confidence chunk data. Aborting..." << endl;
+            return result;
+        }
+    }
+    catch (Spinnaker::Exception& e)
+    {
+        cout << "Error: " << e.what() << endl;
+        result = -1;
+    }
+
+    return result;
+}
+
+// This function disables each type of chunk data before disabling chunk data mode.
+int DisableChunkData(INodeMap& nodeMap)
+{
+    cout << endl << endl << "*** DISABLING CHUNK DATA ***" << endl << endl;
+
+    int result = 0;
+    try
+    {
+        // Retrieve the selector node
+        const CEnumerationPtr ptrChunkSelector = nodeMap.GetNode("ChunkSelector");
+
+        if (!IsReadable(ptrChunkSelector))
+        {
+            cout << "Unable to retrieve chunk selector. Aborting..." << endl;
+            return -1;
+        }
+
+        result = SetChunkEnable(nodeMap, "InferenceFrameId", false);
+        if (result == -1)
+        {
+            cout << "Unable to disable Inference Frame Id chunk data. Aborting..." << endl;
+            return result;
+        }
+
+        // Classification network type
+        // Disable chunk data inference result
+        result = SetChunkEnable(nodeMap, "InferenceResult", false);
+        if (result == -1)
+        {
+            cout << "Unable to disable Inference Result chunk data. Aborting..." << endl;
+            return result;
+        }
+
+        // Disable chunk data inference confidence
+        result = SetChunkEnable(nodeMap, "InferenceConfidence", false);
+        if (result == -1)
+        {
+            cout << "Unable to disable Inference Confidence chunk data. Aborting..." << endl;
+            return result;
+        }
+
+        // Deactivate ChunkMode
+        CBooleanPtr ptrChunkModeActive = nodeMap.GetNode("ChunkModeActive");
+        if (!IsWritable(ptrChunkModeActive))
+        {
+            cout << "Unable to deactivate chunk mode. Aborting..." << endl;
+            return -1;
+        }
+        ptrChunkModeActive->SetValue(false);
+        cout << "Chunk mode deactivated..." << endl;
+
+        // Disable Inference
+        CBooleanPtr ptrInferenceEnable = nodeMap.GetNode("InferenceEnable");
+        if (!IsWritable(ptrInferenceEnable))
+        {
+            cout << "Unable to disable inference. Aborting..." << endl;
+            return -1;
+        }
+        ptrInferenceEnable->SetValue(false);
+        cout << "Inference disabled..." << endl;
     }
     catch (Spinnaker::Exception& e)
     {
@@ -345,21 +456,21 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap, INodeMap& nodeMapTLDevice)
     {
         // Set acquisition mode to continuous
         CEnumerationPtr ptrAcquisitionMode = nodeMap.GetNode("AcquisitionMode");
-        if (!IsAvailable(ptrAcquisitionMode) || !IsWritable(ptrAcquisitionMode))
+        if (!IsWritable(ptrAcquisitionMode))
         {
-            cout << "Unable to set acquisition mode to continuous (node retrieval). Aborting..." << endl << endl;
+            cout << "Unable to set acquisition mode to continuous (node retrieval). Aborting..." << endl;
             return -1;
         }
 
         CEnumEntryPtr ptrAcquisitionModeContinuous = ptrAcquisitionMode->GetEntryByName("Continuous");
-        if (!IsAvailable(ptrAcquisitionModeContinuous) || !IsReadable(ptrAcquisitionModeContinuous))
+        if (!IsReadable(ptrAcquisitionModeContinuous))
         {
             cout << "Unable to set acquisition mode to continuous (entry 'continuous' retrieval). Aborting..." << endl
                  << endl;
             return -1;
         }
 
-        int64_t acquisitionModeContinuous = ptrAcquisitionModeContinuous->GetValue();
+        const int64_t acquisitionModeContinuous = ptrAcquisitionModeContinuous->GetValue();
 
         ptrAcquisitionMode->SetIntValue(acquisitionModeContinuous);
 
@@ -374,10 +485,9 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap, INodeMap& nodeMapTLDevice)
         gcstring deviceSerialNumber("");
 
         CStringPtr ptrStringSerial = nodeMapTLDevice.GetNode("DeviceSerialNumber");
-        if (IsAvailable(ptrStringSerial) && IsReadable(ptrStringSerial))
+        if (IsReadable(ptrStringSerial))
         {
             deviceSerialNumber = ptrStringSerial->GetValue();
-
             cout << "Device serial number retrieved as " << deviceSerialNumber << "..." << endl;
         }
         cout << endl;
@@ -390,10 +500,7 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap, INodeMap& nodeMapTLDevice)
         {
             try
             {
-                // Retrieve the next image from the trigger
-                result = result | GrabNextImageByTrigger(nodeMap, pCam);
-
-                // Retrieve the next received image
+                // Retrieve next received image and ensure image completion
                 ImagePtr pResultImage = pCam->GetNextImage(1000);
 
                 if (pResultImage->IsIncomplete())
@@ -407,11 +514,36 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap, INodeMap& nodeMapTLDevice)
                     cout << "Grabbed image " << imageCnt << ", width = " << pResultImage->GetWidth()
                          << ", height = " << pResultImage->GetHeight() << endl;
 
-                    // Convert image to mono 8
-                    //ImagePtr convertedImage = pResultImage->Convert(PixelFormat_Mono8, HQ_LINEAR);
+                    const ChunkData chunkData = pResultImage->GetChunkData();
+
+                    const int64_t inferenceFrameID = chunkData.GetInferenceFrameId();
+                    cout << "\tInference Frame ID: " << inferenceFrameID << endl;
+
+                    uint64_t inferenceResult = chunkData.GetInferenceResult();
+                    cout << "\tInference Result: " << inferenceResult << " ("
+                            << (inferenceResult < labelClassification.size() ? labelClassification[inferenceResult] : "N/A") << ")"
+                            << endl;
+
+                    double inferenceConfidence = chunkData.GetInferenceConfidence();
+                    cout << "\tInference Confidence: " << inferenceConfidence << endl;
 
                     // Create a unique filename
-                    std::string filename = "image" + GetDateTime();
+                    std::string resultName;
+                    if (inferenceResult == 0)
+                    {
+                        
+                        resultName = "no_bird";
+                    }
+                    else if (inferenceResult == 1)
+                    {
+                        resultName = "bird";
+                    }
+                    else
+                    {
+                        resultName = "NA";
+                    }
+
+                    std::string filename = "image" + GetDateTime() + "_" + resultName + "_" + std::to_string((int)(inferenceConfidence*100));
 
                     // Save image
                     pResultImage->Save(filename.c_str(), Spinnaker::ImageFileFormat::JPEG);
@@ -464,8 +596,41 @@ int RunSingleCamera(CameraPtr pCam)
         // Retrieve GenICam nodemap
         INodeMap& nodeMap = pCam->GetNodeMap();
 
-        // Configure camera settings
-        err = ConfigureCamera(nodeMap);
+        // Check to make sure camera supports inference
+        cout << endl << "Checking camera inference support..." << endl;
+        CBooleanPtr ptrInferenceEnable = nodeMap.GetNode("InferenceEnable");
+        if (!IsWritable(ptrInferenceEnable))
+        {
+            cout << "Inference is not supported on this camera. Aborting..." << endl;
+            return -1;
+        }
+
+        cout << endl << endl << "*** CONFIGURING CAMERA ***" << endl << endl;
+
+        // Configure inference
+        err = ConfigureInference(nodeMap, true);
+        if (err < 0)
+        {
+            return err;
+        }
+
+        // Configure trigger
+        // When enabling inference results via chunk data, the results that accompany a frame
+        // will likely not be the frame that inference was run on. In order to guarantee that
+        // the chunk inference results always correspond to the frame that they are sent with,
+        // the camera needs to be put into the "inference sync" trigger mode.
+        // Note: Enabling this setting will limit frame rate so that every frame contains new
+        //       inference dataset. To not limit the frame rate, you can enable InferenceFrameID
+        //       chunk data to help determine which frame is associated with a particular
+        //       inference data.
+        err = ConfigureTrigger(nodeMap);
+        if (err < 0)
+        {
+            return err;
+        }
+
+        // Configure chunk data
+        err = ConfigureChunkData(nodeMap);
         if (err < 0)
         {
             return err;
@@ -474,8 +639,26 @@ int RunSingleCamera(CameraPtr pCam)
         // Acquire images
         result = result | AcquireImages(pCam, nodeMap, nodeMapTLDevice);
 
-        // Reset trigger
-        result = result | ResetTrigger(nodeMap);
+        // Disable chunk data
+        err = DisableChunkData(nodeMap);
+        if (err < 0)
+        {
+            return err;
+        }
+
+        // Disable trigger
+        err = DisableTrigger(nodeMap);
+        if (err < 0)
+        {
+            return err;
+        }
+
+        // Disable inference
+        err = ConfigureInference(nodeMap, false);
+        if (err < 0)
+        {
+            return err;
+        }
 
         // Deinitialize camera
         pCam->DeInit();
@@ -505,11 +688,16 @@ int main(int argc, const char * argv[]) {
 
     int result = 0;
 
+    // Print application build information
+    cout << "Application build date: " << __DATE__ << " " << __TIME__ << endl << endl;
+
     SystemPtr system = System::GetInstance();
 
-    const LibraryVersion spinLibVersion = system->GetLibraryVersion();
-
-    cout << "Spinnaker library version: " << spinLibVersion.major << "." << spinLibVersion.minor << "." << spinLibVersion.type << "." << spinLibVersion.build << endl << endl;
+    // Print out current library version
+    const LibraryVersion spinnakerLibraryVersion = system->GetLibraryVersion();
+    cout << "Spinnaker library version: " << spinnakerLibraryVersion.major << "." << spinnakerLibraryVersion.minor
+         << "." << spinnakerLibraryVersion.type << "." << spinnakerLibraryVersion.build << endl
+         << endl;
 
     CameraList camList = system->GetCameras();
 
